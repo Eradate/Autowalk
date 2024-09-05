@@ -1,0 +1,151 @@
+getgenv().LibTheme = {
+    MainColor = Color3.fromRGB(35,35,40);
+    BrighterMainColor = Color3.fromRGB(40,40,45);
+    IconsColor = Color3.fromRGB(100,100,120);
+    Accent = Color3.fromRGB(0,100,255);
+    DarkText = Color3.fromRGB(170,170,170);
+    BrightText = Color3.fromRGB(145,145,145);
+    Font = "Gotham";
+    SoundVolume = 0.5;
+    HideKey = "LeftAlt"
+}
+
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Eradate/Oceri/main/OceriLib.lua"))()
+
+local Main = Library.Main("Azurelight Hub")
+
+local Page = Main.Page("Main","3926305904",Vector2.new(924, 204),Vector2.new(36, 36))
+
+local Section = Page.Section("Floor 2 - Mines")
+
+  local Sound = Instance.new("Sound")
+    Sound.Parent = game.SoundService
+    Sound.SoundId = "rbxassetid://550209561"
+    Sound.Volume = 5
+    Sound.PlayOnRemove = true
+    Sound:Destroy()
+
+    return
+elseif workspace:FindFirstChild("PathFindPartsFolder") then
+    game.StarterGui:SetCore("SendNotification", { Title = "Warning"; Text = "If there are issues, contact geodude#2619!" })
+
+    local Sound = Instance.new("Sound")
+    Sound.Parent = game.SoundService
+    Sound.SoundId = "rbxassetid://550209561"
+    Sound.Volume = 5
+    Sound.PlayOnRemove = true
+    Sound:Destroy()
+
+    return
+end
+
+local PathfindingService = game:GetService("PathfindingService")
+local LocalPlayer = game.Players.LocalPlayer
+local LatestRoom = game.ReplicatedStorage.GameData.LatestRoom
+
+-- Make sure the folder is always initialized and exists
+local Folder = workspace:FindFirstChild("PathFindPartsFolder")
+if not Folder then
+    Folder = Instance.new("Folder")
+    Folder.Parent = workspace
+    Folder.Name = "PathFindPartsFolder"
+end
+
+-- Function to get the current door in the current room
+function getCurrentDoor()
+    local CurrentRoomNumber = tostring(LatestRoom.Value)
+    local CurrentRoom = workspace.CurrentRooms:FindFirstChild(CurrentRoomNumber)
+    if CurrentRoom then
+        local Door = CurrentRoom:WaitForChild("Door")
+        return Door
+    else
+        return nil
+    end
+end
+
+-- Function to return the door path for the current and next rooms
+function getPath()
+    local Door = getCurrentDoor()
+    return Door
+end
+
+-- Toggle component to start/stop the auto-walk
+local Toggle = Section.Component("Toggle", "AutoWalk", function(bool)
+    if bool then
+        -- Auto-walk starts when the toggle is on
+        game:GetService("RunService").RenderStepped:connect(function()
+            LocalPlayer.Character.HumanoidRootPart.CanCollide = false
+
+            -- Adjusts walk speed for faster navigation
+            LocalPlayer.Character.Humanoid.WalkSpeed = 21
+
+            -- Get the path to the current door
+            local Path = getPath()
+
+            if Path and LatestRoom.Value < 105 then -- Stop walking when the room is 105
+                -- Move the player to the current door
+                LocalPlayer.Character.Humanoid:MoveTo(Path.Position)
+            elseif LatestRoom.Value >= 105 then
+                -- Stop auto-walking at room 105
+                if Folder then -- Ensure Folder is not nil
+                    Folder:ClearAllChildren()
+                end
+
+                local Sound = Instance.new("Sound")
+                Sound.Parent = game.SoundService
+                Sound.SoundId = "rbxassetid://4590662766"
+                Sound.Volume = 3
+                Sound.PlayOnRemove = true
+                Sound:Destroy()
+
+                game.StarterGui:SetCore("SendNotification", { Title = "AutoWalk Stopped"; Text = "You have reached room 105." })
+                return
+            end
+        end)
+    else
+        -- Clear all paths and stop movement when toggle is turned off
+        if Folder then -- Ensure Folder is not nil
+            Folder:ClearAllChildren()
+        end
+        LocalPlayer.Character.Humanoid.WalkSpeed = 16 -- Reset walk speed to default
+    end
+end, false)  -- Default value of the toggle is off
+
+-- Auto-walk loop to navigate to the next room's door
+while Toggle do  -- Execute auto-walk only if the toggle is on
+    local Destination = getPath()
+
+    if Destination then
+        local path = PathfindingService:CreatePath({ WaypointSpacing = 1, AgentRadius = 0.1, AgentCanJump = false })
+        path:ComputeAsync(LocalPlayer.Character.HumanoidRootPart.Position, Destination.Position)
+        local Waypoints = path:GetWaypoints()
+
+        if path.Status ~= Enum.PathStatus.NoPath then
+            if Folder then -- Ensure Folder is not nil
+                Folder:ClearAllChildren()
+            end
+
+            -- Create visual waypoints for debugging purposes
+            for _, Waypoint in pairs(Waypoints) do
+                local part = Instance.new("Part")
+                part.Size = Vector3.new(1, 1, 1)
+                part.Position = Waypoint.Position
+                part.Shape = "Cylinder"
+                part.Rotation = Vector3.new(0, 0, 90)
+                part.Material = "SmoothPlastic"
+                part.Anchored = true
+                part.CanCollide = false
+                part.Parent = Folder
+            end
+
+            -- Move player to each waypoint
+            for _, Waypoint in pairs(Waypoints) do
+                if LocalPlayer.Character.HumanoidRootPart.Anchored == false then
+                    LocalPlayer.Character.Humanoid:MoveTo(Waypoint.Position)
+                    LocalPlayer.Character.Humanoid.MoveToFinished:Wait()
+                end
+            end
+        end
+    end
+    wait(0.5) -- Small delay between path computations to prevent lag
+end
